@@ -8,7 +8,10 @@ import "react-datepicker/dist/react-datepicker.css";
 const API_BASE = import.meta.env.VITE_STAGING_API_URL;
 const IMG_BASE = import.meta.env.VITE_STAGING_IMG_URL;
 
-export default function QuoteForm() {
+export default function QuoteForm({userId,onQuoteSubmitted}) {
+
+    const curenetUserId = userId;
+    //console.log(userId);
     // ------------------------
     // Utility for empty row
     // ------------------------
@@ -155,21 +158,55 @@ export default function QuoteForm() {
     // -------------------------
     // Submit
     // -------------------------
-    const submitQuote = () => {
-        const payload = rows
-            .filter((r) => r.product)
-            .map((r) => ({
-                id: r.product.value,
-                name: r.product.label,
-                date_text: r.date_text,
-                active_tier: r.activeTier,
-                qty: r.activeTier !== null ? r.tiers[r.activeTier].selected : null,
-                fob_price: r.activeTier !== null ? r.tiers[r.activeTier].price : null,
-                line_total: r.lineTotal,
-            }));
-        console.log("SUBMIT PAYLOAD:", payload);
-    };
 
+
+    const submitQuote = async () => {
+        try {
+            const userId = curenetUserId; // <-- set your user ID variable
+            const firstRow = rows.find(r => r.product);
+            const shippingDate = firstRow ? firstRow.date_text : null;
+
+
+            const payload = {
+                shipping_date: shippingDate,
+                user_id: userId,
+                items: rows
+                    .filter((r) => r.product)
+                    .map((r) => ({
+                        id: r.product.value,
+                        name: r.product.label,
+                        date_text: shippingDate,
+                        active_tier: r.activeTier,
+                        qty: r.activeTier !== null ? r.tiers[r.activeTier].selected : null,
+                        fob_price: r.activeTier !== null ? r.tiers[r.activeTier].price : null,
+                        line_total: r.lineTotal ?? 0,
+                    })),
+            };
+
+            console.log("SUBMIT PAYLOAD:", payload);
+
+            const response = await fetch(
+                "https://wordpress-658092-2176352.cloudwaysapps.com/wp-json/quotebuilder_api/v1/submit_quotes",
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                }
+            );
+
+            const data = await response.json();
+            console.log("API RESPONSE:", data);
+            setRows(Array.from({ length: 5 }, makeEmptyRow));
+            // success alert
+            alert("Quote submitted successfully!");
+            onQuoteSubmitted();
+
+
+        } catch (error) {
+            console.error("Submit Error:", error);
+            alert("Something went wrong. Please try again.");
+        }
+    };
     // -------------------------
     // Highlight style (Option C)
     // -------------------------
@@ -200,7 +237,7 @@ export default function QuoteForm() {
                         maxDate={new Date(new Date().setMonth(new Date().getMonth() + 3))}
                         filterDate={(d) => d.getDay() !== 0 && d.getDay() !== 6}
                     />
-                    <Button variant="link" onClick={() => dateRef.current.setOpen(true)}>
+                    <Button variant="link" onClick={() => dateRef.current.setOpen(true)} className="date-picker-btn">
                         <Image src={IMG_BASE + "/schedule.png"} width={30} />
                     </Button>
                 </Col>
@@ -272,8 +309,8 @@ export default function QuoteForm() {
                         </Col>
 
                         {/* Remove */}
-                        <Col md={1}>
-                            <Button variant="link" onClick={() => removeRow(i)}>
+                        <Col md={1} className="text-end">
+                            <Button className="fmi-removerow-quote" variant="link" onClick={() => removeRow(i)}>
                                 ❌
                             </Button>
                         </Col>
@@ -282,9 +319,9 @@ export default function QuoteForm() {
             ))}
 
             {/* Add row / Total / Submit */}
-            <Row className="mt-4">
+            <Row className="mx-0 button_row_form" >
                 <Col md={6}>
-                    <Button onClick={addRow}>+ Add Row</Button>
+                    <Button onClick={addRow} className="fmi-addrow-quote">+ Add Row </Button>
                 </Col>
                 <Col md={6} className="text-end">
                     <h4>Total: ${finalTotal.toFixed(2)}</h4>
@@ -292,6 +329,7 @@ export default function QuoteForm() {
                         variant="primary"
                         disabled={finalTotal < 1000}
                         onClick={submitQuote}
+                        className="fmi-submit-quote"
                     >
                         Submit Quote (Min $1000)
                     </Button>

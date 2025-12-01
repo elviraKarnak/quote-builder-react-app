@@ -1,0 +1,102 @@
+.fmi-rq-page .woocommerce-MyAccount-navigation{
+    display: none;
+}
+
+.fmi-rq-page .woocommerce-MyAccount-content {
+    width: 100% !important;
+    padding-left: 0;
+
+}
+
+.page-id-10.fmi-rq-page  .container {
+    max-width: 1400px;
+}
+#fmi-quote-builder-app .border-bottom .btn-link, .date-picker-btn.btn.btn-link{
+    background-color: transparent;
+    padding: 0;border: none;
+}
+.fmi-removerow-quote.btn.btn-link{
+    text-decoration: none;
+}
+#fmi-quote-builder-app .border-bottom .btn-link:hover{
+    opacity: 0.7;
+}
+.react-datepicker .react-datepicker__navigation{
+    padding: 0;
+    display: flex;
+    align-items: center;
+    height: 29px
+}
+.react-datepicker .react-datepicker__navigation span{
+    left: 0;
+    top: -9px;
+}
+.card-body .btn{
+    background-color: #70af03;border: 1px solid #70af03;
+    color: white;
+}
+.fmi-addrow-quote.btn.btn-primary{
+    background-color: transparent !important;color: #70af03;border: none;padding: 0;
+}
+.fmi-submit-quote.btn.btn-primary{
+    color: white;
+    background-color: #70af03;
+    border: 1px solid #70af03;
+}
+.fmi-submit-quote.btn.btn-primary:hover{
+    background-color: transparent;color: #70af03;
+}
+.card-body .btn:hover{
+    background-color: transparent;
+    color: #271D19;
+}
+input{
+    box-shadow: unset !important;
+}
+.shiping-date{
+    margin-top:10px;
+    margin-bottom:0
+}
+.total-price{
+    margin-bottom:7px
+}
+.quote-strip-footer{
+    text-align: right;
+}
+.mode-processing.badge{
+    background-color:#f8dda7;color:black;text-transform:capitalize;
+    padding: 10px 20px;
+}
+.mode-expired.badge{
+
+    background-color: rgb(245, 148, 148);color:black;text-transform:capitalize;padding: 10px 20px;
+}
+.mode-success.badge{
+    background-color: #c6e1c6;color:black;text-transform:capitalize;padding: 10px 20px;
+}
+.mode-completed.badge{
+    text-transform:capitalize;background-color: #c8d7e1;color: black;padding: 10px 20px;
+}
+/* Fullscreen background */
+.quote-list-loader {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    z-index: 9999;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Spinner animation */
+.spinner {
+    border: 10px solid #f3f3f3;
+    border-top: 10px solid #70af03;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s linear infinite;
+}
