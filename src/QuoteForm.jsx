@@ -33,6 +33,7 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
     const [rows, setRows] = useState(Array.from({ length: 5 }, makeEmptyRow));
     const [date, setDate] = useState(null);
     const dateRef = useRef(null);
+    const controllerRef = useRef(null);
 
     // -------------------------
     // Helpers
@@ -48,20 +49,64 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
     // -------------------------
     // SEARCH function per row
     // -------------------------
-    const searchProducts = async (inputValue) => {
-        if (!date) return [];
-        const res = await axios.get(API_BASE + "/product_search", {
-            params: {
-                searchquery: inputValue,
-                date_text: formatDateForAPI(date),
-            },
-        });
+    // const searchProducts = async (inputValue) => {
+    //     if (!inputValue || inputValue.length < 3) {
+    //         return []; // No results until at least 3 characters
+    //     }
+    //
+    //     if (!date) return [];
+    //     const res = await axios.get(API_BASE + "/product_search", {
+    //         params: {
+    //             searchquery: inputValue,
+    //             date_text: formatDateForAPI(date),
+    //         },
+    //     });
+    //
+    //     return res.data.map((p) => ({
+    //         value: p.id,
+    //         label: p.name,
+    //         full: p,
+    //     }));
+    // };
 
-        return res.data.map((p) => ({
-            value: p.id,
-            label: p.name,
-            full: p,
-        }));
+    const searchProducts = async (inputValue) => {
+        if (!inputValue || inputValue.length < 3) {
+            return [];
+        }
+
+        if (!date) return [];
+
+        // 🔹 Cancel previous request
+        if (controllerRef.current) {
+            controllerRef.current.abort();
+        }
+
+        // 🔹 Create new controller
+        controllerRef.current = new AbortController();
+
+        try {
+            const res = await axios.get(API_BASE + "/product_search", {
+                params: {
+                    searchquery: inputValue,
+                    date_text: formatDateForAPI(date),
+                },
+                signal: controllerRef.current.signal, // ← attach controller
+            });
+
+            return res.data.map((p) => ({
+                value: p.id,
+                label: p.name,
+                full: p,
+            }));
+
+        } catch (err) {
+            if (axios.isCancel(err)) {
+                // Request was canceled → safe ignore
+                return [];
+            }
+            console.error("API Error:", err);
+            return [];
+        }
     };
 
     // -------------------------
@@ -227,7 +272,8 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
                 <Col md={6}>
                     <h5>Date: {date ? date.toDateString() : "Select a Date"}</h5>
                 </Col>
-                <Col md={6} className="text-end">
+                <Col md={6} className="text-end d-flex justify-content-end">
+                    <h5 className="me-3">Select Ship Date</h5>
                     <DatePicker
                         ref={dateRef}
                         selected={date}
@@ -297,7 +343,7 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
                                                 </option>
                                             ))}
                                         </Form.Select>
-                                        <div className="mt-1">Price: ${t.price.toFixed(2)}</div>
+                                        {/*<div className="mt-1">Price: ${t.price.toFixed(2)}</div>*/}
                                     </div>
                                 ) : null
                             )}
@@ -331,7 +377,7 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
                         onClick={submitQuote}
                         className="fmi-submit-quote"
                     >
-                        Submit Quote (Min $1000)
+                        Submit Request (Min $1000)
                     </Button>
                 </Col>
             </Row>
