@@ -72,7 +72,7 @@ export default function QuoteDetailsModal({ show, quoteId, onHide,userId }) {
                             <tr>
                                 <th>Item Name</th>
                                 <th className="text-center">Qty</th>
-                                <th className="text-end">Price</th>
+                                {/*<th className="text-end">Price</th>*/}
                                 <th className="text-end">Total Price</th>
                                 <th className="text-end">Quote Price</th>
                             </tr>
@@ -87,7 +87,7 @@ export default function QuoteDetailsModal({ show, quoteId, onHide,userId }) {
                                     <tr key={item.id}>
                                         <td>{item.item_name}</td>
                                         <td className="text-center">{qty}</td>
-                                        <td className="text-end">${price.toFixed(2)}</td>
+                                        {/*<td className="text-end">${price.toFixed(2)}</td>*/}
                                         <td className="text-end">${total.toFixed(2)}</td>
                                         <td></td>
                                     </tr>

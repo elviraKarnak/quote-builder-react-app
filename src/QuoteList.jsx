@@ -4,6 +4,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import QuoteForm from "./QuoteForm";
 import axios from "axios";
 import QuoteDetailsModal from "./QuoteDetailsModal.jsx";
+import {userAPIDummyData} from "./dumydata.js";
 
 const API_BASE = import.meta.env.VITE_STAGING_API_URL;
 
@@ -12,6 +13,10 @@ export default function QuoteList() {
     const [quotes, setQuotes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [userId, setUserId] = useState(null);
+    const [userData, setUserData] = useState(null);
+    const [shippingId, setShippingId] = useState(false);
+
+    const [selectedShipping, setSelectedShipping] = useState(null);
 
     const [selectedQuoteId, setSelectedQuoteId] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -43,6 +48,23 @@ export default function QuoteList() {
         console.log(item.quote_id);
     };
 
+    const handleSelect = (e) => {
+        const id = parseInt(e.target.value);
+        const found = userData.user_data.shipping_data_list.find(
+            (item) => item.shipping_id === id
+        );
+        setShippingId(found.shipping_id);
+        setSelectedShipping(found);
+
+        //console.log(shippingId);
+    };
+
+    const decodeHTML = (html) => {
+        const txt = document.createElement("textarea");
+        txt.innerHTML = html;
+        return txt.value;
+    };
+
 
 
     async function updateQuoteStatus(quoteId, status) {
@@ -66,199 +88,44 @@ export default function QuoteList() {
         try {
             console.log("Calling WP API...");
 
-           //  setquoteloading(true);
-           //  //
-            const res = await fetch(
-                `${window.wpApiSettings.root}quotebuilder_api/v1/load_user_data`,
-                {
-                    method: "GET",
-                    credentials: "include",
-                    headers: {
-                        "X-WP-Nonce": window.wpApiSettings.nonce,
-                        "Content-Type": "application/json",
-                    },
-                }
-            );
+            setquoteloading(true);
+            //
+            // const res = await fetch(
+            //     `${window.wpApiSettings.root}quotebuilder_api/v1/load_user_data`,
+            //     {
+            //         method: "GET",
+            //         credentials: "include",
+            //         headers: {
+            //             "X-WP-Nonce": window.wpApiSettings.nonce,
+            //             "Content-Type": "application/json",
+            //         },
+            //     }
+            // );
 
-           let userData = await res.json();
-            console.log("API Response:", userData);
+          // let userAPIData = await res.json();
+            //console.log("API Response:", userAPIData);
 
 
-            //If user not logged in — stop
+            // If user not logged in — stop
             // if (!userData.success) {
             //     console.warn("User not logged in");
             //     setQuotes([]);
             //     return;
             // }
-            //
-            //  let userData = {
-            //      "success": true,
-            //      "user_id": 1,
-            //      "user_data": {
-            //          "id": 1,
-            //          "email": null,
-            //          "username": null,
-            //          "first_name": "Raihan",
-            //          "last_name": "Reza",
-            //          "customer_no": "866-916-5360",
-            //          "company_name": "Fresh Flowers Garden",
-            //          "billing_address": {
-            //              "ID": 2268157,
-            //              "post_author": "1",
-            //              "post_date": "2025-05-08 02:31:05",
-            //              "post_date_gmt": "2025-05-08 07:31:05",
-            //              "post_content": "",
-            //              "post_title": "Fresh Flowers Garden",
-            //              "post_excerpt": "",
-            //              "post_status": "publish",
-            //              "comment_status": "closed",
-            //              "ping_status": "closed",
-            //              "post_password": "",
-            //              "post_name": "fmi-raihan-reza",
-            //              "to_ping": "",
-            //              "pinged": "",
-            //              "post_modified": "2025-05-21 00:06:05",
-            //              "post_modified_gmt": "2025-05-21 05:06:05",
-            //              "post_content_filtered": "",
-            //              "post_parent": 0,
-            //              "guid": "https://wordpress-658092-2176352.cloudwaysapps.com/user_billing_address/fmi-raihan-reza/",
-            //              "menu_order": 0,
-            //              "post_type": "user_billing_address",
-            //              "post_mime_type": "",
-            //              "comment_count": "0",
-            //              "filter": "raw"
-            //          },
-            //          "shipping_address": {
-            //              "ID": 2268010,
-            //              "post_author": "1",
-            //              "post_date": "2025-04-29 05:31:58",
-            //              "post_date_gmt": "2025-04-29 10:31:58",
-            //              "post_content": "",
-            //              "post_title": "William Flower Gardens",
-            //              "post_excerpt": "",
-            //              "post_status": "publish",
-            //              "comment_status": "closed",
-            //              "ping_status": "closed",
-            //              "post_password": "",
-            //              "post_name": "fmi-raihan-reza-3",
-            //              "to_ping": "",
-            //              "pinged": "",
-            //              "post_modified": "2025-12-04 07:40:47",
-            //              "post_modified_gmt": "2025-12-04 12:40:47",
-            //              "post_content_filtered": "",
-            //              "post_parent": 0,
-            //              "guid": "https://wordpress-658092-2176352.cloudwaysapps.com/carrier_address/fmi-raihan-reza-3/",
-            //              "menu_order": 0,
-            //              "post_type": "carrier_address",
-            //              "post_mime_type": "",
-            //              "comment_count": "0",
-            //              "filter": "raw"
-            //          },
-            //          "billing_data_list": [
-            //              {
-            //                  "billing_id": 2270105,
-            //                  "billing_company": "Fresh Flowers Garden",
-            //                  "billing_address_1": "609 E State St",
-            //                  "billing_address_2": "",
-            //                  "billing_city": "New York",
-            //                  "billing_country": "US",
-            //                  "billing_email": "karnak@elvirainfotech.com",
-            //                  "billing_first_name": "Raihan",
-            //                  "billing_last_name": "Raihan",
-            //                  "billing_postcode": "10009",
-            //                  "billing_state": "NY",
-            //                  "billing_phone": "866-916-5360",
-            //                  "bill_carrier_primary": ""
-            //              },
-            //              {
-            //                  "billing_id": 2268157,
-            //                  "billing_company": "Fresh Flowers Garden",
-            //                  "billing_address_1": "3136 Little Rd",
-            //                  "billing_address_2": "",
-            //                  "billing_city": "Deadhorse",
-            //                  "billing_country": "US",
-            //                  "billing_email": "karnak@elvirainfotech.com",
-            //                  "billing_first_name": "Raihan",
-            //                  "billing_last_name": "Raihan",
-            //                  "billing_postcode": "33143",
-            //                  "billing_state": "ID",
-            //                  "billing_phone": "866-916-5360",
-            //                  "bill_carrier_primary": "yes"
-            //              }
-            //          ],
-            //          "shipping_data_list": [
-            //              {
-            //                  "shipping_id": 2269783,
-            //                  "shipping_company": "Paul&#8217;s Gardens",
-            //                  "shipping_address_1": "251 Bekar St.",
-            //                  "shipping_address_2": "",
-            //                  "shipping_city": "New York",
-            //                  "shipping_country": "US",
-            //                  "shipping_email": "",
-            //                  "shipping_first_name": "William",
-            //                  "shipping_last_name": "Paul",
-            //                  "shipping_postcode": "10009",
-            //                  "shipping_state": "NY",
-            //                  "shipping_phone": "(707) 937-5804",
-            //                  "ship_carrier_primary": "yes"
-            //              },
-            //              {
-            //                  "shipping_id": 2269123,
-            //                  "shipping_company": "Paul&#8217;s Flower Gardens",
-            //                  "shipping_address_1": "9607 NW 33RD ST",
-            //                  "shipping_address_2": "",
-            //                  "shipping_city": "Deadhorse",
-            //                  "shipping_country": "US",
-            //                  "shipping_email": "",
-            //                  "shipping_first_name": "Paul",
-            //                  "shipping_last_name": "Walker",
-            //                  "shipping_postcode": "33156",
-            //                  "shipping_state": "IN",
-            //                  "shipping_phone": "866-916-5360",
-            //                  "ship_carrier_primary": ""
-            //              },
-            //              {
-            //                  "shipping_id": 2269122,
-            //                  "shipping_company": "Gabriela Flower Gardens",
-            //                  "shipping_address_1": "609 E State St",
-            //                  "shipping_address_2": "",
-            //                  "shipping_city": "Pendleton",
-            //                  "shipping_country": "US",
-            //                  "shipping_email": "",
-            //                  "shipping_first_name": "Gabriela",
-            //                  "shipping_last_name": "Gomez",
-            //                  "shipping_postcode": "46064",
-            //                  "shipping_state": "IN",
-            //                  "shipping_phone": "866-916-5360",
-            //                  "ship_carrier_primary": ""
-            //              },
-            //              {
-            //                  "shipping_id": 2268010,
-            //                  "shipping_company": "William Flower Gardens",
-            //                  "shipping_address_1": "360 Dalton Hwy",
-            //                  "shipping_address_2": "Dalton Street",
-            //                  "shipping_city": "Deadhorse",
-            //                  "shipping_country": "US",
-            //                  "shipping_email": "d.crespo@fmifarms.com",
-            //                  "shipping_first_name": "William",
-            //                  "shipping_last_name": "Henry",
-            //                  "shipping_postcode": "99708",
-            //                  "shipping_state": "AK",
-            //                  "shipping_phone": "(877) 474-3565",
-            //                  "ship_carrier_primary": ""
-            //              }
-            //          ],
-            //          "user_data": null
-            //      },
-            //      "message": "user logged In"
-            //  }
+
+             let userAPIData = userAPIDummyData;
+             setUserData(userAPIData);
+
+             console.log(userAPIData.success);
 
 
-            if (userData.success) {
+            if (userAPIData.success) {
 
-                setUserId(userData.user_id);
+                console.log(userAPIData.user_id);
 
-                const response = await fetch(API_BASE + "/quotes?user_id="+userData.user_id);
+                setUserId(userAPIData.user_id);
+
+                const response = await fetch(API_BASE + "/quotes?user_id="+userAPIData.user_id);
                 const json = await response.json();
 
                 if (json.success && Array.isArray(json.quotes)) {
@@ -268,7 +135,7 @@ export default function QuoteList() {
 
                         // total price = sum of item_price
                         const totalPrice = quote.items.reduce((sum, item) => {
-                            return sum + Number(item.item_price || 0);
+                            return sum + Number(item.line_total || 0);
                         }, 0);
 
                         const startTime = parseWPDate(quote.start_date_time);
@@ -393,11 +260,48 @@ export default function QuoteList() {
         );
     }
 
+
     return (
         <>
             <div className="container mt-4">
-                <QuoteForm userId={userId} onQuoteSubmitted={loadQuotes} />
+        {/* ==========================
+                    Select Dropdown
+                =========================== */}
+        <label><strong>Select Shipping Address</strong></label>
+        <select onChange={handleSelect} defaultValue="">
+            <option value="" disabled>
+                -- Select Shipping --
+            </option>
+
+            {userData.user_data.shipping_data_list.map((ship) => (
+                <option key={ship.shipping_id} value={ship.shipping_id}>
+                    {decodeHTML(ship.shipping_company)}
+                </option>
+            ))}
+        </select>
+
+            {/* ==========================
+                        Display Formatted Address
+                    =========================== */}
+            {selectedShipping && (
+                <div style={{ marginTop: "12px" }}>
+                    <strong>Ship To:</strong>
+                    <div>{selectedShipping.shipping_first_name} {selectedShipping.shipping_last_name}</div>
+                    <div>{selectedShipping.shipping_address_1}</div>
+                    {selectedShipping.shipping_address_2 && (
+                        <div>{selectedShipping.shipping_address_2}</div>
+                    )}
+                    <div>
+                        {selectedShipping.shipping_city}, {selectedShipping.shipping_state}{" "}
+                        {selectedShipping.shipping_postcode}
+                    </div>
+                </div>
+            )}
             </div>
+
+
+                <QuoteForm userId={userId} onQuoteSubmitted={loadQuotes} shippingId ={shippingId}/>
+
 
             <div className="container mt-4">
                 {quoteloading ? (

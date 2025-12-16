@@ -1,27 +1,42 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import AsyncSelect from "react-select/async";
 import axios from "axios";
-import { Container, Button, Row, Col, Form, Image } from "react-bootstrap";
+import { Container, Button, Row, Table, Modal, Col, Form, Image } from "react-bootstrap";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import Fuse from "fuse.js";
+
 
 const API_BASE = import.meta.env.VITE_STAGING_API_URL;
 const IMG_BASE = import.meta.env.VITE_STAGING_IMG_URL;
 
-export default function QuoteForm({userId,onQuoteSubmitted}) {
+export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
 
     const curenetUserId = userId;
     //console.log(userId);
     // ------------------------
     // Utility for empty row
     // ------------------------
+    // const makeEmptyRow = () => ({
+    //     product: null, // selected product object
+    //     tiers: [
+    //         { options: [], selected: null, price: 0 },
+    //         { options: [], selected: null, price: 0 },
+    //         { options: [], selected: null, price: 0 },
+    //     ],
+    //     activeTier: null,
+    //     lineTotal: 0,
+    //     date_text: null,
+    // });
+
     const makeEmptyRow = () => ({
-        product: null, // selected product object
+        product: null,
         tiers: [
-            { options: [], selected: null, price: 0 },
-            { options: [], selected: null, price: 0 },
-            { options: [], selected: null, price: 0 },
+            { options: [], price: 0 },
+            { options: [], price: 0 },
+            { options: [], price: 0 },
         ],
+        qty: "",               // ✅ ADD THIS
         activeTier: null,
         lineTotal: 0,
         date_text: null,
@@ -30,10 +45,112 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
     // -------------------------
     // State
     // -------------------------
+
+
+    const [allProducts, setAllProducts] = useState([]);
+
+
+    const [productsLoading, setProductsLoading] = useState(false);
+
+
+    const [fuse, setFuse] = useState(null);
+
+    // product search modal
+    const [showProductModal, setShowProductModal] = useState(false);
+    const [activeRowIndex, setActiveRowIndex] = useState(null);
+
+    // modal search
+    const [searchTerm, setSearchTerm] = useState("");
+    const [searchResults, setSearchResults] = useState([]);
+
+
     const [rows, setRows] = useState(Array.from({ length: 5 }, makeEmptyRow));
     const [date, setDate] = useState(null);
     const dateRef = useRef(null);
     const controllerRef = useRef(null);
+
+    const [showShippingModal, setShowShippingModal] = useState(false);
+    const [shippingData, setShippingData] = useState(null);
+    const [selectedShipping, setSelectedShipping] = useState(null);
+    const [triggerPrice, setTriggerPrice] = useState(null);
+
+    // -------------------------
+    // Effects
+    // -------------------------
+
+
+    useEffect(() => {
+        if (!date) return;
+
+        const loadProducts = async () => {
+            setProductsLoading(true);
+            try {
+                const res = await axios.get(API_BASE + "/product_search", {
+                    params: {
+                        date_text: formatDateForAPI(date),
+                        model: "fob", // if required
+                        user_id: userId,
+                    },
+                });
+
+                const formatted = res.data.map(p => ({
+                    value: p.id,
+                    label: p.name,
+                    unit: p.unit,
+                    image: p.image,
+                    full: p,
+                }));
+
+                setAllProducts(formatted);
+
+                console.log(formatted);
+
+                setFuse(
+                    new Fuse(formatted, {
+                        keys: ["label"],
+                        threshold: 0.35,        // lower = stricter
+                        ignoreLocation: true,
+                        minMatchCharLength: 2,
+                    })
+                );
+            } catch (err) {
+                console.error("Product load error:", err);
+                setAllProducts([]);
+            } finally {
+                setProductsLoading(false);
+            }
+        };
+
+        loadProducts();
+    }, [date]);
+
+    useEffect(() => {
+        if (!triggerPrice) return; // if no price yet, don't call API
+
+        const getShipping = async () => {
+            try {
+                const response = await axios.get(
+                    API_BASE+ "/shipping-methods",
+                    {
+                        params: {
+                            user_id: userId,
+                            quote_total: triggerPrice,
+                        },
+                    }
+                );
+
+                setShippingData(response.data);
+            } catch (error) {
+                console.error("Shipping API error:", error);
+            }
+        };
+
+        getShipping();
+    }, [triggerPrice]); // <-- runs when final price is set
+
+
+
+
 
     // -------------------------
     // Helpers
@@ -44,6 +161,94 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
         const dd = String(d.getDate()).padStart(2, "0");
         const yyyy = d.getFullYear();
         return `${mm}/${dd}/${yyyy}`;
+    };
+
+    const openProductModal = (rowIndex) => {
+        setActiveRowIndex(rowIndex);
+        setShowProductModal(true);
+        setSearchTerm("");
+        setSearchResults([]);
+    };
+
+    const handleModalSearch = (value) => {
+        setSearchTerm(value);
+
+        if (!value || !fuse) {
+            setSearchResults([]);
+            return;
+        }
+
+        const results = fuse.search(value).map(r => r.item);
+        setSearchResults(results);
+    };
+
+    const selectProductFromModal = (product) => {
+        if (activeRowIndex === null) return;
+
+        handleProductSelect(activeRowIndex, product);
+
+        setShowProductModal(false);
+        setActiveRowIndex(null);
+    };
+
+    const resolveTierByQty = (tiers, qty) => {
+        if (!qty || qty < 1 || !tiers?.length) return null;
+
+        const q = Number(qty);
+
+        // Build normalized tier list
+        const parsedTiers = tiers
+            .map((tier, index) => {
+                if (!tier.options?.length) return null;
+
+                // Extract max value from ranges
+                const maxValues = tier.options
+                    .map(opt => opt.value)
+                    .map(val => {
+                        if (typeof val === "string" && val.includes("-")) {
+                            return Number(val.split("-")[1]);
+                        }
+                        return Number(val);
+                    })
+                    .filter(v => !isNaN(v));
+
+                if (!maxValues.length) return null;
+
+                return {
+                    index,
+                    max: Math.max(...maxValues),
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.max - b.max);
+
+        if (!parsedTiers.length) return null;
+
+        // Find first tier where qty <= max
+        const matched = parsedTiers.find(t => q <= t.max);
+
+        // If qty exceeds all ranges → use LAST tier
+        return matched ? matched.index : parsedTiers[parsedTiers.length - 1].index;
+    };
+
+    const handleQtyChange = (rowIndex, value) => {
+        setRows((prev) =>
+            prev.map((r, i) => {
+                if (i !== rowIndex) return r;
+
+                const tierIndex = resolveTierByQty(r.tiers, value);
+
+                return {
+                    ...r,
+                    qty: value,
+                    activeTier: tierIndex,
+                    lineTotal:
+                        tierIndex !== null
+                            ? Number(value) * r.tiers[tierIndex].price
+                            : 0,
+                };
+            })
+        );
     };
 
     // -------------------------
@@ -69,45 +274,61 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
     //     }));
     // };
 
-    const searchProducts = async (inputValue) => {
-        if (!inputValue || inputValue.length < 3) {
-            return [];
-        }
+    // const searchProducts = async (inputValue) => {
+    //     if (!inputValue || inputValue.length < 3) {
+    //         return [];
+    //     }
+    //
+    //     if (!date) return [];
+    //
+    //     // 🔹 Cancel previous request
+    //     if (controllerRef.current) {
+    //         controllerRef.current.abort();
+    //     }
+    //
+    //     // 🔹 Create new controller
+    //     controllerRef.current = new AbortController();
+    //
+    //     try {
+    //         const res = await axios.get(API_BASE + "/product_search", {
+    //             params: {
+    //                 searchquery: inputValue,
+    //                 date_text: formatDateForAPI(date),
+    //             },
+    //             signal: controllerRef.current.signal, // ← attach controller
+    //         });
+    //
+    //         return res.data.map((p) => ({
+    //             value: p.id,
+    //             label: p.name,
+    //             full: p,
+    //         }));
+    //
+    //     } catch (err) {
+    //         if (axios.isCancel(err)) {
+    //             // Request was canceled → safe ignore
+    //             return [];
+    //         }
+    //         console.error("API Error:", err);
+    //         return [];
+    //     }
+    // };
 
-        if (!date) return [];
-
-        // 🔹 Cancel previous request
-        if (controllerRef.current) {
-            controllerRef.current.abort();
-        }
-
-        // 🔹 Create new controller
-        controllerRef.current = new AbortController();
-
-        try {
-            const res = await axios.get(API_BASE + "/product_search", {
-                params: {
-                    searchquery: inputValue,
-                    date_text: formatDateForAPI(date),
-                },
-                signal: controllerRef.current.signal, // ← attach controller
-            });
-
-            return res.data.map((p) => ({
-                value: p.id,
-                label: p.name,
-                full: p,
-            }));
-
-        } catch (err) {
-            if (axios.isCancel(err)) {
-                // Request was canceled → safe ignore
+        const searchProducts = async (inputValue) => {
+            if (!inputValue || inputValue.length < 2) {
                 return [];
             }
-            console.error("API Error:", err);
-            return [];
-        }
-    };
+
+            // const search = inputValue.toLowerCase();
+            //
+            // return allProducts.filter(p =>
+            //     p.label.toLowerCase().includes(search)
+            // );
+
+            if (!fuse) return [];
+
+            return fuse.search(inputValue).map(r => r.item);
+        };
 
     // -------------------------
     // Product selection in row
@@ -149,25 +370,25 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
     // Tier selection change
     // ONLY last changed tier controls lineTotal
     // -------------------------
-    const handleTierChange = (rowIndex, tierIndex, selected) => {
-        setRows((prev) => {
-            const copy = prev.map((r, i) => ({ ...r, tiers: r.tiers.map(t => ({ ...t })) }));
-            const row = copy[rowIndex];
-
-            const tier = row.tiers[tierIndex];
-            tier.selected = selected ? Number(selected.value) : null;
-
-            row.activeTier = tierIndex;
-
-            if (tier.selected) {
-                row.lineTotal = tier.selected * tier.price;
-            } else {
-                row.lineTotal = 0;
-            }
-
-            return copy;
-        });
-    };
+    // const handleTierChange = (rowIndex, tierIndex, selected) => {
+    //     setRows((prev) => {
+    //         const copy = prev.map((r, i) => ({ ...r, tiers: r.tiers.map(t => ({ ...t })) }));
+    //         const row = copy[rowIndex];
+    //
+    //         const tier = row.tiers[tierIndex];
+    //         tier.selected = selected ? Number(selected.value) : null;
+    //
+    //         row.activeTier = tierIndex;
+    //
+    //         if (tier.selected) {
+    //             row.lineTotal = tier.selected * tier.price;
+    //         } else {
+    //             row.lineTotal = 0;
+    //         }
+    //
+    //         return copy;
+    //     });
+    // };
 
     // -------------------------
     // Add row
@@ -194,6 +415,9 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
     const handleDateChange = (d) => {
         setDate(d);
         setRows(Array.from({ length: 5 }, () => makeEmptyRow())); // FIXED
+        setProductsLoading(true);            // 👈 FORCE loader immediately
+        setAllProducts([]);
+        setFuse(null);
     }
     // -------------------------
     // Final Total
@@ -205,7 +429,7 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
     // -------------------------
 
 
-    const submitQuote = async () => {
+    const submitQuote = async (selectedShipping) => {
         try {
             const userId = curenetUserId; // <-- set your user ID variable
             const firstRow = rows.find(r => r.product);
@@ -215,6 +439,8 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
             const payload = {
                 shipping_date: shippingDate,
                 user_id: userId,
+                shipping_address_id:shippingId,
+                shipping_method:selectedShipping.id,
                 items: rows
                     .filter((r) => r.product)
                     .map((r) => ({
@@ -255,15 +481,23 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
     // -------------------------
     // Highlight style (Option C)
     // -------------------------
-    const highlightStyle = (isActive) => ({
-        border: isActive ? "2px solid #0d6efd" : "1px solid #ced4da",
-        borderRadius: "4px",
-    });
+    // const highlightStyle = (isActive) => ({
+    //     border: isActive ? "2px solid #0d6efd" : "1px solid #ced4da",
+    //     borderRadius: "4px",
+    // });
+
+    const openShippingModal = () => {
+        setTriggerPrice(finalTotal); // this triggers useEffect()
+        setShowShippingModal(true);
+    };
+
+
 
     // ===============================================================
     // RENDER
     // ===============================================================
     return (
+        <>
         <Container className="mt-4">
             <h4>Item List</h4>
 
@@ -289,80 +523,95 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
                 </Col>
             </Row>
 
-            {/* ROWS */}
-            {rows.map((row, i) => (
-                <div key={i} className="border-bottom pb-3 mb-3">
-                    <Row className="align-items-start">
+            <Table bordered responsive>
+                <thead>
+                <tr>
+                    <th style={{ width: "40%" }}>Product</th>
+                    <th style={{ width: "10%" }}>UOM</th>
+                    <th style={{ width: "30%" }}>Qty</th>
+                    {/*<th style={{ width: "15%" }}>Unit Price</th>*/}
+                    <th style={{ width: "15%" }}>Line Total</th>
+                    <th style={{ width: "5%" }}></th>
+                </tr>
+                </thead>
 
-                        {/* PRODUCT SEARCH */}
-                        <Col md={4}>
-                            <AsyncSelect
-                                loadOptions={searchProducts}
-                                onChange={(p) => handleProductSelect(i, p)}
-                                value={row.product}
-                                placeholder="Search product..."
-                                isDisabled={!date}
-                                defaultOptions
+                <tbody>
+                {productsLoading ? (
+                    <tr>
+                        <td colSpan={6} className="text-center py-5">
+                            <div className="spinner-border text-primary" role="status">
+                                <span className="visually-hidden">Loading...</span>
+                            </div>
+                            <div className="mt-2">Loading products…</div>
+                        </td>
+                    </tr>
+                ) : (
+                rows.map((row, i) => (
+                    <tr key={i}>
+                        {/* PRODUCT CELL */}
+                        <td
+                            onClick={() => {
+                                if (!productsLoading) openProductModal(i);
+                            }}
+                            style={{
+                                pointerEvents: (productsLoading || !date) ? "none" : "pointer",
+                                opacity: (productsLoading || !date) ? 0.5 : 1,
+                            }}
+                        >
+                      <span>
+                        <img
+                            src={row.product?.image || IMG_BASE + "/insert-picture-icon.png"}
+                            alt={row.product?.label}
+                            width={row.product ? 100 : 32}
+                            className="pe-3"
+                        />
+                      </span>
+                            {row.product ? row.product.label : "Search product"}
+                        </td>
+                        {/* UOM */}
+                        <td>{row.product?.unit || "-"}</td>
+
+                        {/* QTY INPUT (TEXT FIELD) */}
+                        <td>
+                            <Form.Control
+                                type="number"
+                                min="0"
+                                placeholder="Qty"
+                                value={row.qty}
+                                onChange={(e) =>
+                                    handleQtyChange(i, e.target.value)
+                                }
+                                disabled={!row.product || productsLoading}
                             />
-                        </Col>
+                        </td>
 
-                        {/* IMAGE */}
-                        <Col md={2}>
-                            {row.product?.full?.image ? (
-                                <img
-                                    src={row.product.full.image}
-                                    style={{ width: 80, height: 80, objectFit: "contain" }}
-                                />
-                            ) : (
-                                <div style={{ width: 80, height: 80, background: "#f3f3f3" }} />
-                            )}
-                        </Col>
-
-                        {/* Tier dropdowns stacked */}
-                        <Col md={3}>
-                            {row.tiers.map((t, ti) =>
-                                t.options.length > 0 ? (
-                                    <div key={ti} className="mb-2">
-                                        <Form.Select
-                                            value={t.selected ?? ""}
-                                            onChange={(e) =>
-                                                handleTierChange(
-                                                    i,
-                                                    ti,
-                                                    e.target.value
-                                                        ? { value: e.target.value }
-                                                        : null
-                                                )
-                                            }
-                                            style={highlightStyle(row.activeTier === ti)}
-                                        >
-                                            <option value="">Qty</option>
-                                            {t.options.map((op) => (
-                                                <option key={op.value} value={op.value}>
-                                                    {op.label}
-                                                </option>
-                                            ))}
-                                        </Form.Select>
-                                        {/*<div className="mt-1">Price: ${t.price.toFixed(2)}</div>*/}
-                                    </div>
-                                ) : null
-                            )}
-                        </Col>
+                        {/* UNIT PRICE */}
+                        {/*<td>*/}
+                        {/*    $*/}
+                        {/*    {row.activeTier !== null*/}
+                        {/*        ? row.tiers[row.activeTier].price.toFixed(2)*/}
+                        {/*        : "0.00"}*/}
+                        {/*</td>*/}
 
                         {/* LINE TOTAL */}
-                        <Col md={2}>
-                            <strong>Line Total: ${row.lineTotal.toFixed(2)}</strong>
-                        </Col>
+                        <td>
+                            <strong>${row.lineTotal.toFixed(2)}</strong>
+                        </td>
 
-                        {/* Remove */}
-                        <Col md={1} className="text-end">
-                            <Button className="fmi-removerow-quote" variant="link" onClick={() => removeRow(i)}>
+                        {/* REMOVE */}
+                        <td className="text-end">
+                            <Button
+                                variant="link"
+                                onClick={() => removeRow(i)}
+                            >
                                 ❌
                             </Button>
-                        </Col>
-                    </Row>
-                </div>
-            ))}
+                        </td>
+                    </tr>
+                ))
+                )}
+                </tbody>
+            </Table>
 
             {/* Add row / Total / Submit */}
             <Row className="mx-0 button_row_form" >
@@ -374,7 +623,7 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
                     <Button
                         variant="primary"
                         disabled={finalTotal < 1000}
-                        onClick={submitQuote}
+                        onClick={openShippingModal}
                         className="fmi-submit-quote"
                     >
                         Submit Request (Min $1000)
@@ -382,5 +631,151 @@ export default function QuoteForm({userId,onQuoteSubmitted}) {
                 </Col>
             </Row>
         </Container>
+        <Modal show={showShippingModal} onHide={() => setShowShippingModal(false)} centered size="lg">
+            <Modal.Header closeButton>
+                <Modal.Title>Select Shipping Method</Modal.Title>
+            </Modal.Header>
+
+            <Modal.Body>
+                {!shippingData ? (
+                    <p>Loading shipping options...</p>
+                ) : (
+                    <>
+                        {/* FedEx Section */}
+                        <h5 className="mb-3">Delivery Method</h5>
+
+                        {["fedex", "fedex_second"].map(key => {
+                            const item = shippingData[key];
+                            return (
+                                <div className="d-flex justify-content-between mb-2" key={item.slug}>
+                                    <div>
+                                        <input
+                                            type="radio"
+                                            id={item.slug}
+                                            name="shipping"
+                                            value={item.slug}
+                                            onChange={() => setSelectedShipping(item)}
+                                        />
+                                        <label for={item.slug} className="ms-2">{item.name}</label>
+                                    </div>
+                                    <strong>${item.shippingPercentage}</strong>
+                                </div>
+                            );
+                        })}
+
+                        {/* Airlines */}
+                        <h5 className="mt-4">Airlines</h5>
+                        {shippingData.airline.map(item => (
+                            <div className="d-flex justify-content-between mb-2" key={item.id}>
+                                <div>
+                                    <input
+                                        type="radio"
+                                        id={item.id}
+                                        name="shipping"
+                                        value={item.slug}
+                                        onChange={() => setSelectedShipping(item)}
+                                    />
+                                    <label className="ms-2" for={item.id}>{item.name}</label>
+                                </div>
+
+                                <strong>${(item.shippingPercentage).toFixed(2)}</strong>
+                            </div>
+                        ))}
+
+                        {/* Trucking Lines */}
+                        <h5 className="mt-4">Trucking Lines</h5>
+                        {shippingData.truckline.map(item => (
+                            <div className="d-flex justify-content-between mb-3" key={item.id}>
+                                <div>
+                                    <input
+                                        type="radio"
+                                        id={item.id}
+                                        name="shipping"
+                                        value={item.slug}
+                                        onChange={() => setSelectedShipping(item)}
+                                    />
+                                    <label for={item.id} className="ms-2">{item.name}</label>
+                                </div>
+
+                                <strong>${(item.shippingPercentage).toFixed(2)}</strong>
+                            </div>
+                        ))}
+                    </>
+                )}
+            </Modal.Body>
+
+            <Modal.Footer>
+                <Button variant="secondary fmi-submit-quote" onClick={() => setShowShippingModal(false)}>
+                    Cancel
+                </Button>
+
+                <Button
+                    variant="primary fmi-submit-quote"
+                    disabled={!selectedShipping}
+                    onClick={() => {
+                        console.log(selectedShipping);
+                        submitQuote(selectedShipping);
+                        setShowShippingModal(false);
+                    }}
+                >
+                    Confirm & Submit
+                </Button>
+            </Modal.Footer>
+        </Modal>
+
+            <Modal
+                show={showProductModal}
+                onHide={() => setShowProductModal(false)}
+                size="xl"
+                centered
+            >
+                <Modal.Header closeButton>
+                    <Form.Control
+                        placeholder="Search products"
+                        value={searchTerm}
+                        onChange={(e) => handleModalSearch(e.target.value)}
+                        autoFocus
+                    />
+                </Modal.Header>
+
+                <Modal.Body>
+                    <Row>
+                        {/* LEFT SUGGESTIONS */}
+                        <Col md={3}>
+                            <h6>Top Suggestions</h6>
+                            {searchResults.slice(0, 6).map((p, i) => (
+                                <div
+                                    key={i}
+                                    onClick={() => selectProductFromModal(p)}
+                                >
+                                    {p.label}
+                                </div>
+                            ))}
+                        </Col>
+
+                        {/* RIGHT PRODUCT GRID */}
+                        <Col md={9}>
+                            <Row>
+                                {searchResults.map((p) => (
+                                    <Col md={4} key={p.value}>
+                                        <div
+                                            onClick={() => selectProductFromModal(p)}
+                                        >
+                                            {p.full?.image && (
+                                                <img
+                                                    src={p.full.image}
+                                                    style={{ width: "100%", height: 150, objectFit: "contain" }}
+                                                />
+                                            )}
+                                            <div>{p.label}</div>
+                                        </div>
+                                    </Col>
+                                ))}
+                            </Row>
+                        </Col>
+                    </Row>
+                </Modal.Body>
+            </Modal>
+        </>
     );
 }
