@@ -314,53 +314,48 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
     //     }
     // };
 
-        const searchProducts = async (inputValue) => {
-            if (!inputValue || inputValue.length < 2) {
-                return [];
-            }
-
-            // const search = inputValue.toLowerCase();
-            //
-            // return allProducts.filter(p =>
-            //     p.label.toLowerCase().includes(search)
-            // );
-
-            if (!fuse) return [];
-
-            return fuse.search(inputValue).map(r => r.item);
-        };
 
     // -------------------------
     // Product selection in row
     // -------------------------
-    const handleProductSelect = (rowIndex, product) => {
-        setRows((prev) => {
-            const copy = prev.map((r, i) => ({ ...r, tiers: r.tiers.map(t => ({ ...t })) }));
-            const row = copy[rowIndex];
 
+
+    const handleProductSelect = (rowIndex, product) => {
+        setRows(prev => {
+            const copy = prev.map(r => ({
+                ...r,
+                tiers: r.tiers.map(t => ({ ...t })),
+            }));
+
+            const row = copy[rowIndex];
             row.product = product;
             row.date_text = product.full?.date_text || null;
 
             const pd = product.full?.prices_data || [];
 
-            // Build tiers
             for (let i = 0; i < 3; i++) {
                 const tier = pd[i] || { stock_range_f: [], fob_price: 0 };
-                const options = (tier.stock_range_f || []).map((q) => ({
-                    label: q,
-                    value: q,
-                }));
-
                 row.tiers[i] = {
-                    options,
-                    selected: null,
+                    options: (tier.stock_range_f || []).map(q => ({
+                        label: q,
+                        value: q,
+                    })),
                     price: Number(tier.fob_price || 0),
                 };
             }
 
-            // Reset active tier + total
-            row.activeTier = null;
-            row.lineTotal = 0;
+            // 🔁 RE-APPLY QTY IF USER ALREADY TYPED
+            if (row.qty) {
+                const tierIndex = resolveTierByQty(row.tiers, row.qty);
+                row.activeTier = tierIndex;
+                row.lineTotal =
+                    tierIndex !== null
+                        ? Number(row.qty) * row.tiers[tierIndex].price
+                        : 0;
+            } else {
+                row.activeTier = null;
+                row.lineTotal = 0;
+            }
 
             return copy;
         });
@@ -435,26 +430,65 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
             const firstRow = rows.find(r => r.product);
             const shippingDate = firstRow ? firstRow.date_text : null;
 
+            //
+            // const payload = {
+            //     shipping_date: shippingDate,
+            //     user_id: userId,
+            //     shipping_address_id:shippingId,
+            //     shipping_method:selectedShipping.id,
+            //     // items: rows
+            //     //     .filter((r) => r.product)
+            //     //     .map((r) => ({
+            //     //         id: r.product.value,
+            //     //         name: r.product.label,
+            //     //         date_text: shippingDate,
+            //     //         active_tier: r.activeTier,
+            //     //         qty: r.activeTier !== null ? r.tiers[r.activeTier].selected : null,
+            //     //         fob_price: r.activeTier !== null ? r.tiers[r.activeTier].price : null,
+            //     //         line_total: r.lineTotal ?? 0,
+            //     //     })),
+            //     items: rows
+            //         .filter((r) => r.product && Number(r.qty) > 0)
+            //         .map((r) => ({
+            //             product_id: r.product.value,
+            //             product_name: r.product.label,
+            //             unit: r.product.unit,                 // ✅ NEW
+            //             qty: Number(r.qty),                   // ✅ FIXED
+            //             active_tier: r.activeTier,             // optional but useful
+            //             fob_price:
+            //                 r.activeTier !== null
+            //                     ? r.tiers[r.activeTier].price
+            //                     : 0,
+            //             line_total: r.lineTotal,
+            //         })),
+            // };
+
 
             const payload = {
                 shipping_date: shippingDate,
                 user_id: userId,
-                shipping_address_id:shippingId,
-                shipping_method:selectedShipping.id,
+                shipping_address_id: shippingId,
+                shipping_method: selectedShipping.id,
                 items: rows
-                    .filter((r) => r.product)
-                    .map((r) => ({
+                    .filter(r => r.product && Number(r.qty) > 0)
+                    .map(r => ({
                         id: r.product.value,
                         name: r.product.label,
                         date_text: shippingDate,
                         active_tier: r.activeTier,
-                        qty: r.activeTier !== null ? r.tiers[r.activeTier].selected : null,
-                        fob_price: r.activeTier !== null ? r.tiers[r.activeTier].price : null,
-                        line_total: r.lineTotal ?? 0,
-                    })),
+                        qty: Number(r.qty),
+                        fob_price:
+                            r.activeTier !== null
+                                ? r.tiers[r.activeTier].price
+                                : 0,
+                        line_total: r.lineTotal
+                    }))
             };
 
+
             console.log("SUBMIT PAYLOAD:", payload);
+
+            //return;
 
             const response = await fetch(
                 "https://wordpress-658092-2176352.cloudwaysapps.com/wp-json/quotebuilder_api/v1/submit_quotes",
