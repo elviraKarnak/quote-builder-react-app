@@ -10,13 +10,12 @@ const API_BASE = import.meta.env.VITE_STAGING_API_URL;
 
 export default function QuoteList() {
 
+
     const [quotes, setQuotes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [userId, setUserId] = useState(null);
     const [userData, setUserData] = useState(null);
-    const [shippingId, setShippingId] = useState(false);
 
-    const [selectedShipping, setSelectedShipping] = useState(null);
 
     const [selectedQuoteId, setSelectedQuoteId] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -48,25 +47,6 @@ export default function QuoteList() {
         console.log(item.quote_id);
     };
 
-    const handleSelect = (e) => {
-        const id = parseInt(e.target.value);
-        const found = userData.user_data.shipping_data_list.find(
-            (item) => item.shipping_id === id
-        );
-        setShippingId(found.shipping_id);
-        setSelectedShipping(found);
-
-        //console.log(shippingId);
-    };
-
-    const decodeHTML = (html) => {
-        const txt = document.createElement("textarea");
-        txt.innerHTML = html;
-        return txt.value;
-    };
-
-
-
     async function updateQuoteStatus(quoteId, status) {
         try {
             await axios.post(
@@ -90,19 +70,19 @@ export default function QuoteList() {
 
             setquoteloading(true);
             //
-            // const res = await fetch(
-            //     `${window.wpApiSettings.root}quotebuilder_api/v1/load_user_data`,
-            //     {
-            //         method: "GET",
-            //         credentials: "include",
-            //         headers: {
-            //             "X-WP-Nonce": window.wpApiSettings.nonce,
-            //             "Content-Type": "application/json",
-            //         },
-            //     }
-            // );
+            const res = await fetch(
+                `${window.wpApiSettings.root}quotebuilder_api/v1/load_user_data`,
+                {
+                    method: "GET",
+                    credentials: "include",
+                    headers: {
+                        "X-WP-Nonce": window.wpApiSettings.nonce,
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
 
-          // let userAPIData = await res.json();
+          let userAPIData = await res.json();
             //console.log("API Response:", userAPIData);
 
 
@@ -113,7 +93,7 @@ export default function QuoteList() {
             //     return;
             // }
 
-             let userAPIData = userAPIDummyData;
+             // let userAPIData = userAPIDummyData;
              setUserData(userAPIData);
 
              console.log(userAPIData.success);
@@ -254,8 +234,8 @@ export default function QuoteList() {
 
     if (loading) {
         return (
-            <div className="text-center mt-5">
-                <h5>Loading quotes...</h5>
+            <div className="quote-list-loader">
+                <span className="spinner"></span>
             </div>
         );
     }
@@ -263,44 +243,7 @@ export default function QuoteList() {
 
     return (
         <>
-            <div className="container mt-4">
-        {/* ==========================
-                    Select Dropdown
-                =========================== */}
-        <label><strong>Select Shipping Address</strong></label>
-        <select onChange={handleSelect} defaultValue="">
-            <option value="" disabled>
-                -- Select Shipping --
-            </option>
-
-            {userData.user_data.shipping_data_list.map((ship) => (
-                <option key={ship.shipping_id} value={ship.shipping_id}>
-                    {decodeHTML(ship.shipping_company)}
-                </option>
-            ))}
-        </select>
-
-            {/* ==========================
-                        Display Formatted Address
-                    =========================== */}
-            {selectedShipping && (
-                <div style={{ marginTop: "12px" }}>
-                    <strong>Ship To:</strong>
-                    <div>{selectedShipping.shipping_first_name} {selectedShipping.shipping_last_name}</div>
-                    <div>{selectedShipping.shipping_address_1}</div>
-                    {selectedShipping.shipping_address_2 && (
-                        <div>{selectedShipping.shipping_address_2}</div>
-                    )}
-                    <div>
-                        {selectedShipping.shipping_city}, {selectedShipping.shipping_state}{" "}
-                        {selectedShipping.shipping_postcode}
-                    </div>
-                </div>
-            )}
-            </div>
-
-
-                <QuoteForm userId={userId} onQuoteSubmitted={loadQuotes} shippingId ={shippingId}/>
+            <QuoteForm userId={userId} onQuoteSubmitted={loadQuotes} userData ={userData}/>
 
 
             <div className="container mt-4">

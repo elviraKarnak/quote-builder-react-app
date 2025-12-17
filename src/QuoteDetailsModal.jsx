@@ -47,7 +47,7 @@ export default function QuoteDetailsModal({ show, quoteId, onHide,userId }) {
 
 
     return (
-        <Modal show={show} onHide={onHide} centered size="lg" backdrop="static">
+        <Modal show={show} onHide={onHide} centered size="lg" backdrop="static" className="quote-modal-gold">
             <Modal.Header closeButton>
                 <Modal.Title>Quote #{quoteId}</Modal.Title>
             </Modal.Header>

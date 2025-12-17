@@ -1,33 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
-import AsyncSelect from "react-select/async";
 import axios from "axios";
 import { Container, Button, Row, Table, Modal, Col, Form, Image } from "react-bootstrap";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import Fuse from "fuse.js";
 
+import ReviewQuote from "./ReviewQuote.jsx";
 
 const API_BASE = import.meta.env.VITE_STAGING_API_URL;
 const IMG_BASE = import.meta.env.VITE_STAGING_IMG_URL;
 
-export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
+export default function QuoteForm({userId,onQuoteSubmitted, userData}) {
 
     const curenetUserId = userId;
     //console.log(userId);
     // ------------------------
     // Utility for empty row
     // ------------------------
-    // const makeEmptyRow = () => ({
-    //     product: null, // selected product object
-    //     tiers: [
-    //         { options: [], selected: null, price: 0 },
-    //         { options: [], selected: null, price: 0 },
-    //         { options: [], selected: null, price: 0 },
-    //     ],
-    //     activeTier: null,
-    //     lineTotal: 0,
-    //     date_text: null,
-    // });
 
     const makeEmptyRow = () => ({
         product: null,
@@ -46,13 +35,11 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
     // State
     // -------------------------
 
-
+     // product API
+    const [globalLoader, setGlobalLoader] = useState(false);
     const [allProducts, setAllProducts] = useState([]);
-
-
+    // const controllerRef = useRef(null);
     const [productsLoading, setProductsLoading] = useState(false);
-
-
     const [fuse, setFuse] = useState(null);
 
     // product search modal
@@ -63,16 +50,35 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
     const [searchTerm, setSearchTerm] = useState("");
     const [searchResults, setSearchResults] = useState([]);
 
-
+     // builder from
     const [rows, setRows] = useState(Array.from({ length: 5 }, makeEmptyRow));
     const [date, setDate] = useState(null);
     const dateRef = useRef(null);
-    const controllerRef = useRef(null);
+    const [triggerPrice, setTriggerPrice] = useState(null);
 
     const [showShippingModal, setShowShippingModal] = useState(false);
     const [shippingData, setShippingData] = useState(null);
+    // const [selectedShipping, setSelectedShipping] = useState(null);
+
+    const [shippingAddressId, setShippingAddressId] = useState(false);
     const [selectedShipping, setSelectedShipping] = useState(null);
-    const [triggerPrice, setTriggerPrice] = useState(null);
+
+    const [selectedShippingMethod, setSelectedShippingMethod] = useState(null);
+
+    // modals
+    const STEPS = {
+        SHIPPING: 0,
+        DELIVERY: 1,
+        REVIEW: 2,
+    };
+
+    const stepTitle = {
+        0: "Shipping Address",
+        1: "Delivery Method",
+        2: "Review Quote",
+    };
+
+    const [step, setStep] = useState(STEPS.SHIPPING);
 
     // -------------------------
     // Effects
@@ -84,6 +90,7 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
 
         const loadProducts = async () => {
             setProductsLoading(true);
+           // setGlobalLoader(true);
             try {
                 const res = await axios.get(API_BASE + "/product_search", {
                     params: {
@@ -149,8 +156,7 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
     }, [triggerPrice]); // <-- runs when final price is set
 
 
-
-
+    const tableDisabled = !date || productsLoading;
 
     // -------------------------
     // Helpers
@@ -252,70 +258,6 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
     };
 
     // -------------------------
-    // SEARCH function per row
-    // -------------------------
-    // const searchProducts = async (inputValue) => {
-    //     if (!inputValue || inputValue.length < 3) {
-    //         return []; // No results until at least 3 characters
-    //     }
-    //
-    //     if (!date) return [];
-    //     const res = await axios.get(API_BASE + "/product_search", {
-    //         params: {
-    //             searchquery: inputValue,
-    //             date_text: formatDateForAPI(date),
-    //         },
-    //     });
-    //
-    //     return res.data.map((p) => ({
-    //         value: p.id,
-    //         label: p.name,
-    //         full: p,
-    //     }));
-    // };
-
-    // const searchProducts = async (inputValue) => {
-    //     if (!inputValue || inputValue.length < 3) {
-    //         return [];
-    //     }
-    //
-    //     if (!date) return [];
-    //
-    //     // 🔹 Cancel previous request
-    //     if (controllerRef.current) {
-    //         controllerRef.current.abort();
-    //     }
-    //
-    //     // 🔹 Create new controller
-    //     controllerRef.current = new AbortController();
-    //
-    //     try {
-    //         const res = await axios.get(API_BASE + "/product_search", {
-    //             params: {
-    //                 searchquery: inputValue,
-    //                 date_text: formatDateForAPI(date),
-    //             },
-    //             signal: controllerRef.current.signal, // ← attach controller
-    //         });
-    //
-    //         return res.data.map((p) => ({
-    //             value: p.id,
-    //             label: p.name,
-    //             full: p,
-    //         }));
-    //
-    //     } catch (err) {
-    //         if (axios.isCancel(err)) {
-    //             // Request was canceled → safe ignore
-    //             return [];
-    //         }
-    //         console.error("API Error:", err);
-    //         return [];
-    //     }
-    // };
-
-
-    // -------------------------
     // Product selection in row
     // -------------------------
 
@@ -362,30 +304,6 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
     };
 
     // -------------------------
-    // Tier selection change
-    // ONLY last changed tier controls lineTotal
-    // -------------------------
-    // const handleTierChange = (rowIndex, tierIndex, selected) => {
-    //     setRows((prev) => {
-    //         const copy = prev.map((r, i) => ({ ...r, tiers: r.tiers.map(t => ({ ...t })) }));
-    //         const row = copy[rowIndex];
-    //
-    //         const tier = row.tiers[tierIndex];
-    //         tier.selected = selected ? Number(selected.value) : null;
-    //
-    //         row.activeTier = tierIndex;
-    //
-    //         if (tier.selected) {
-    //             row.lineTotal = tier.selected * tier.price;
-    //         } else {
-    //             row.lineTotal = 0;
-    //         }
-    //
-    //         return copy;
-    //     });
-    // };
-
-    // -------------------------
     // Add row
     // -------------------------
     const addRow = () => {
@@ -424,51 +342,17 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
     // -------------------------
 
 
-    const submitQuote = async (selectedShipping) => {
+    const submitQuote = async (selectedShippingMethod) => {
         try {
             const userId = curenetUserId; // <-- set your user ID variable
             const firstRow = rows.find(r => r.product);
             const shippingDate = firstRow ? firstRow.date_text : null;
 
-            //
-            // const payload = {
-            //     shipping_date: shippingDate,
-            //     user_id: userId,
-            //     shipping_address_id:shippingId,
-            //     shipping_method:selectedShipping.id,
-            //     // items: rows
-            //     //     .filter((r) => r.product)
-            //     //     .map((r) => ({
-            //     //         id: r.product.value,
-            //     //         name: r.product.label,
-            //     //         date_text: shippingDate,
-            //     //         active_tier: r.activeTier,
-            //     //         qty: r.activeTier !== null ? r.tiers[r.activeTier].selected : null,
-            //     //         fob_price: r.activeTier !== null ? r.tiers[r.activeTier].price : null,
-            //     //         line_total: r.lineTotal ?? 0,
-            //     //     })),
-            //     items: rows
-            //         .filter((r) => r.product && Number(r.qty) > 0)
-            //         .map((r) => ({
-            //             product_id: r.product.value,
-            //             product_name: r.product.label,
-            //             unit: r.product.unit,                 // ✅ NEW
-            //             qty: Number(r.qty),                   // ✅ FIXED
-            //             active_tier: r.activeTier,             // optional but useful
-            //             fob_price:
-            //                 r.activeTier !== null
-            //                     ? r.tiers[r.activeTier].price
-            //                     : 0,
-            //             line_total: r.lineTotal,
-            //         })),
-            // };
-
-
             const payload = {
                 shipping_date: shippingDate,
                 user_id: userId,
-                shipping_address_id: shippingId,
-                shipping_method: selectedShipping.id,
+                shipping_address_id: shippingAddressId,
+                shipping_method: selectedShippingMethod.id,
                 items: rows
                     .filter(r => r.product && Number(r.qty) > 0)
                     .map(r => ({
@@ -488,24 +372,27 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
 
             console.log("SUBMIT PAYLOAD:", payload);
 
+            setShowShippingModal(false);
+            setGlobalLoader(true);
+
             //return;
 
             const response = await fetch(
-                "https://wordpress-658092-2176352.cloudwaysapps.com/wp-json/quotebuilder_api/v1/submit_quotes",
+                API_BASE +"/submit_quotes",
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(payload),
                 }
+
             );
 
             const data = await response.json();
             console.log("API RESPONSE:", data);
             setRows(Array.from({ length: 5 }, makeEmptyRow));
             // success alert
-            alert("Quote submitted successfully!");
             onQuoteSubmitted();
-
+            setGlobalLoader(false);
 
         } catch (error) {
             console.error("Submit Error:", error);
@@ -520,11 +407,43 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
     //     borderRadius: "4px",
     // });
 
+    // const openShippingModal = () => {
+    //     setTriggerPrice(finalTotal); // this triggers useEffect()
+    //     setShowShippingModal(true);
+    // };
+
     const openShippingModal = () => {
-        setTriggerPrice(finalTotal); // this triggers useEffect()
+        setStep(STEPS.SHIPPING);        // ✅ RESET STEP
+        setSelectedShippingMethod(null);
+        setTriggerPrice(finalTotal);
         setShowShippingModal(true);
     };
 
+    const handleSelect = (e) => {
+        const id = parseInt(e.target.value);
+        const found = userData.user_data.shipping_data_list.find(
+            (item) => item.shipping_id === id
+        );
+        setShippingAddressId(found.shipping_id);
+        setSelectedShipping(found);
+
+        //console.log(shippingId);
+    };
+
+    const decodeHTML = (html) => {
+        const txt = document.createElement("textarea");
+        txt.innerHTML = html;
+        return txt.value;
+    };
+
+
+    if (globalLoader) {
+        return (
+            <div className="quote-list-loader">
+                <span className="spinner"></span>
+            </div>
+        );
+    }
 
 
     // ===============================================================
@@ -552,101 +471,117 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
                         filterDate={(d) => d.getDay() !== 0 && d.getDay() !== 6}
                     />
                     <Button variant="link" onClick={() => dateRef.current.setOpen(true)} className="date-picker-btn">
-                        <Image src={IMG_BASE + "/schedule.png"} width={30} />
+                        <Image src={IMG_BASE + "/schedulegold.png"} width={30} />
                     </Button>
                 </Col>
             </Row>
+            <div className="quote-table-wrapper position-relative">
+                {tableDisabled && (
+                    <div className="table-overlay d-flex align-items-center justify-content-center">
+                        <div className="overlay-text animate-zoom">
+                            {productsLoading
+                                ? <><div className="quote-list-loader">
+                                    <span className="spinner"></span>
+                                </div></>
+                                : <> <Button variant="link" onClick={() => dateRef.current.setOpen(true)} className="date-picker-btn overlay-dt-btn">
+                                    <Image src={IMG_BASE + "/schedulegold.png"} width={30} />
+                                     Select a ship date first
+                                </Button>
+                                 </>}
 
-            <Table bordered responsive>
-                <thead>
-                <tr>
-                    <th style={{ width: "40%" }}>Product</th>
-                    <th style={{ width: "10%" }}>UOM</th>
-                    <th style={{ width: "30%" }}>Qty</th>
-                    {/*<th style={{ width: "15%" }}>Unit Price</th>*/}
-                    <th style={{ width: "15%" }}>Line Total</th>
-                    <th style={{ width: "5%" }}></th>
-                </tr>
-                </thead>
-
-                <tbody>
-                {productsLoading ? (
-                    <tr>
-                        <td colSpan={6} className="text-center py-5">
-                            <div className="spinner-border text-primary" role="status">
-                                <span className="visually-hidden">Loading...</span>
-                            </div>
-                            <div className="mt-2">Loading products…</div>
-                        </td>
-                    </tr>
-                ) : (
-                rows.map((row, i) => (
-                    <tr key={i}>
-                        {/* PRODUCT CELL */}
-                        <td
-                            onClick={() => {
-                                if (!productsLoading) openProductModal(i);
-                            }}
-                            style={{
-                                pointerEvents: (productsLoading || !date) ? "none" : "pointer",
-                                opacity: (productsLoading || !date) ? 0.5 : 1,
-                            }}
-                        >
-                      <span>
-                        <img
-                            src={row.product?.image || IMG_BASE + "/insert-picture-icon.png"}
-                            alt={row.product?.label}
-                            width={row.product ? 100 : 32}
-                            className="pe-3"
-                        />
-                      </span>
-                            {row.product ? row.product.label : "Search product"}
-                        </td>
-                        {/* UOM */}
-                        <td>{row.product?.unit || "-"}</td>
-
-                        {/* QTY INPUT (TEXT FIELD) */}
-                        <td>
-                            <Form.Control
-                                type="number"
-                                min="0"
-                                placeholder="Qty"
-                                value={row.qty}
-                                onChange={(e) =>
-                                    handleQtyChange(i, e.target.value)
-                                }
-                                disabled={!row.product || productsLoading}
-                            />
-                        </td>
-
-                        {/* UNIT PRICE */}
-                        {/*<td>*/}
-                        {/*    $*/}
-                        {/*    {row.activeTier !== null*/}
-                        {/*        ? row.tiers[row.activeTier].price.toFixed(2)*/}
-                        {/*        : "0.00"}*/}
-                        {/*</td>*/}
-
-                        {/* LINE TOTAL */}
-                        <td>
-                            <strong>${row.lineTotal.toFixed(2)}</strong>
-                        </td>
-
-                        {/* REMOVE */}
-                        <td className="text-end">
-                            <Button
-                                variant="link"
-                                onClick={() => removeRow(i)}
-                            >
-                                ❌
-                            </Button>
-                        </td>
-                    </tr>
-                ))
+                        </div>
+                    </div>
                 )}
-                </tbody>
-            </Table>
+                <Table bordered responsive className={tableDisabled ? "table-disabled" : ""}>
+                    <thead>
+                    <tr>
+                        <th style={{ width: "40%" }}>Product</th>
+                        <th style={{ width: "10%" }}>UOM</th>
+                        <th style={{ width: "30%" }}>Qty</th>
+                        {/*<th style={{ width: "15%" }}>Unit Price</th>*/}
+                        <th style={{ width: "15%" }}>Line Total</th>
+                        <th style={{ width: "5%" }}></th>
+                    </tr>
+                    </thead>
 
+                    <tbody>
+                    {productsLoading ? (
+                        <tr>
+                            <td colSpan={6} className="text-center py-5">
+                                <div className="spinner-border text-primary" role="status">
+                                    <span className="visually-hidden">Loading...</span>
+                                </div>
+                                <div className="mt-2">Loading products…</div>
+                            </td>
+                        </tr>
+                    ) : (
+                    rows.map((row, i) => (
+                        <tr key={i}>
+                            {/* PRODUCT CELL */}
+                            <td
+                                onClick={() => {
+                                    if (!productsLoading) openProductModal(i);
+                                }}
+                                style={{
+                                    pointerEvents: (tableDisabled ) ? "none" : "auto",
+                                    opacity: (tableDisabled ) ? 0.5 : 1,
+                                }}
+                            >
+                          <span>
+                            <img
+                                src={row.product?.image || IMG_BASE + "/insert-picture-icon.png"}
+                                alt={row.product?.label}
+                                width={row.product ? 100 : 32}
+                                className="pe-3"
+                            />
+                          </span>
+                                {row.product ? row.product.label : "Search product"}
+                            </td>
+                            {/* UOM */}
+                            <td>{row.product?.unit || "-"}</td>
+
+                            {/* QTY INPUT (TEXT FIELD) */}
+                            <td>
+                                <Form.Control
+                                    type="number"
+                                    min="0"
+                                    placeholder="Qty"
+                                    value={row.qty}
+                                    onChange={(e) =>
+                                        handleQtyChange(i, e.target.value)
+                                    }
+                                    disabled={!row.product || productsLoading}
+                                />
+                            </td>
+
+                            {/* UNIT PRICE */}
+                            {/*<td>*/}
+                            {/*    $*/}
+                            {/*    {row.activeTier !== null*/}
+                            {/*        ? row.tiers[row.activeTier].price.toFixed(2)*/}
+                            {/*        : "0.00"}*/}
+                            {/*</td>*/}
+
+                            {/* LINE TOTAL */}
+                            <td>
+                                <strong>${row.lineTotal.toFixed(2)}</strong>
+                            </td>
+
+                            {/* REMOVE */}
+                            <td className="text-end">
+                                <Button
+                                    variant="link"
+                                    onClick={() => removeRow(i)}
+                                >
+                                    ❌
+                                </Button>
+                            </td>
+                        </tr>
+                    ))
+                    )}
+                    </tbody>
+                </Table>
+            </div>
             {/* Add row / Total / Submit */}
             <Row className="mx-0 button_row_form" >
                 <Col md={6}>
@@ -665,95 +600,190 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
                 </Col>
             </Row>
         </Container>
-        <Modal show={showShippingModal} onHide={() => setShowShippingModal(false)} centered size="lg">
+            <Modal
+                show={showShippingModal}
+                onHide={() => setShowShippingModal(false)}
+                centered
+                size="lg"
+                className="quote-modal-gold shipping-modal"
+                backdrop="static"
+                keyboard={false}
+            >
             <Modal.Header closeButton>
-                <Modal.Title>Select Shipping Method</Modal.Title>
+                <Modal.Title>{stepTitle[step]}</Modal.Title>
             </Modal.Header>
 
             <Modal.Body>
-                {!shippingData ? (
+                {step === STEPS.SHIPPING && (
+                    <div className="container mt-4">
+                        <label className="mb-2">
+                            <strong>Select Shipping Address</strong>
+                        </label>
+
+                        <select
+                            onChange={handleSelect}
+                            defaultValue=""
+                            className="form-select"
+                        >
+                            <option value="" disabled>
+                                -- Select Shipping --
+                            </option>
+
+                            {userData?.user_data?.shipping_data_list?.map(ship => (
+                                <option key={ship.shipping_id} value={ship.shipping_id}>
+                                    {decodeHTML(ship.shipping_company)}
+                                </option>
+                            ))}
+                        </select>
+
+                        {selectedShipping && (
+                            <div className="mt-3">
+                                <strong>Ship To:</strong>
+                                <div>
+                                    {selectedShipping.shipping_first_name}{" "}
+                                    {selectedShipping.shipping_last_name}
+                                </div>
+                                <div>{selectedShipping.shipping_address_1}</div>
+                                {selectedShipping.shipping_address_2 && (
+                                    <div>{selectedShipping.shipping_address_2}</div>
+                                )}
+                                <div>
+                                    {selectedShipping.shipping_city},{" "}
+                                    {selectedShipping.shipping_state}{" "}
+                                    {selectedShipping.shipping_postcode}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                {step === STEPS.DELIVERY && (!shippingData ? (
                     <p>Loading shipping options...</p>
-                ) : (
+                    ) : (
                     <>
-                        {/* FedEx Section */}
-                        <h5 className="mb-3">Delivery Method</h5>
+                {/* FedEx Section */}
+                <h5 className="mb-3">Delivery Method</h5>
 
-                        {["fedex", "fedex_second"].map(key => {
-                            const item = shippingData[key];
-                            return (
-                                <div className="d-flex justify-content-between mb-2" key={item.slug}>
-                                    <div>
-                                        <input
-                                            type="radio"
-                                            id={item.slug}
-                                            name="shipping"
-                                            value={item.slug}
-                                            onChange={() => setSelectedShipping(item)}
-                                        />
-                                        <label for={item.slug} className="ms-2">{item.name}</label>
-                                    </div>
-                                    <strong>${item.shippingPercentage}</strong>
-                                </div>
-                            );
-                        })}
-
-                        {/* Airlines */}
-                        <h5 className="mt-4">Airlines</h5>
-                        {shippingData.airline.map(item => (
-                            <div className="d-flex justify-content-between mb-2" key={item.id}>
-                                <div>
-                                    <input
-                                        type="radio"
-                                        id={item.id}
-                                        name="shipping"
-                                        value={item.slug}
-                                        onChange={() => setSelectedShipping(item)}
-                                    />
-                                    <label className="ms-2" for={item.id}>{item.name}</label>
-                                </div>
-
-                                <strong>${(item.shippingPercentage).toFixed(2)}</strong>
+                {["fedex", "fedex_second"].map(key => {
+                    const item = shippingData[key];
+                    return (
+                        <div className="d-flex justify-content-between mb-2" key={item.slug}>
+                            <div>
+                                <input
+                                    type="radio"
+                                    id={item.slug}
+                                    name="shipping"
+                                    value={item.slug}
+                                    onChange={() => setSelectedShippingMethod(item)}
+                                />
+                                <label htmlFor={item.slug} className="ms-2">{item.name}</label>
                             </div>
-                        ))}
+                            <strong>${item.shippingPercentage}</strong>
+                        </div>
+                    );
+                })}
 
-                        {/* Trucking Lines */}
-                        <h5 className="mt-4">Trucking Lines</h5>
-                        {shippingData.truckline.map(item => (
-                            <div className="d-flex justify-content-between mb-3" key={item.id}>
-                                <div>
-                                    <input
-                                        type="radio"
-                                        id={item.id}
-                                        name="shipping"
-                                        value={item.slug}
-                                        onChange={() => setSelectedShipping(item)}
-                                    />
-                                    <label for={item.id} className="ms-2">{item.name}</label>
-                                </div>
+                {/* Airlines */}
+                <h5 className="mt-4">Airlines</h5>
+                {shippingData.airline.map(item => (
+                    <div className="d-flex justify-content-between mb-2" key={item.id}>
+                        <div>
+                            <input
+                                type="radio"
+                                id={item.id}
+                                name="shipping"
+                                value={item.slug}
+                                onChange={() => setSelectedShippingMethod(item)}
+                            />
+                            <label className="ms-2" for={item.id}>{item.name}</label>
+                        </div>
 
-                                <strong>${(item.shippingPercentage).toFixed(2)}</strong>
-                            </div>
-                        ))}
-                    </>
+                        <strong>${(item.shippingPercentage).toFixed(2)}</strong>
+                    </div>
+                ))}
+
+                {/* Trucking Lines */}
+                <h5 className="mt-4">Trucking Lines</h5>
+                {shippingData.truckline.map(item => (
+                    <div className="d-flex justify-content-between mb-3" key={item.id}>
+                        <div>
+                            <input
+                                type="radio"
+                                id={item.id}
+                                name="shipping"
+                                value={item.slug}
+                                onChange={() => setSelectedShippingMethod(item)}
+                            />
+                            <label for={item.id} className="ms-2">{item.name}</label>
+                        </div>
+
+                        <strong>${(item.shippingPercentage).toFixed(2)}</strong>
+                    </div>
+                ))}
+            </>
+                ))}
+                {step === STEPS.REVIEW && (
+                    <ReviewQuote
+                        quoteId={'########'}
+                        shipDate={
+                            date
+                                ? date.toLocaleDateString("en-US", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "2-digit",
+                                })
+                                : ""
+                        }
+                        shipData={selectedShipping}
+                        shippingMethodName={selectedShippingMethod?.name}
+                        items={rows
+                            .filter(r => r.product)     // ✅ IMPORTANT
+                            .map(r => ({
+                                name: r.product.label,
+                                uom: r.product.unit,
+                                qty: r.qty,
+                                unit_price:
+                                    r.activeTier !== null
+                                        ? r.tiers[r.activeTier].price
+                                        : 0,
+                                line_total: r.lineTotal,
+                            }))
+                        }
+                        subTotal={finalTotal}
+                        discountPercent={10}
+                        discountAmount={finalTotal * (10 / 100)}
+                        grandTotal={finalTotal - (finalTotal * (10 / 100))}
+                    />
                 )}
             </Modal.Body>
 
-            <Modal.Footer>
-                <Button variant="secondary fmi-submit-quote" onClick={() => setShowShippingModal(false)}>
-                    Cancel
+            <Modal.Footer className="justify-content-between">
+                <Button
+                    variant="secondary"
+                   // disabled={step === STEPS.SHIPPING}
+                    onClick={() => setStep(prev => prev - 1)}
+                >
+                    Previous
                 </Button>
 
-                <Button
-                    variant="primary fmi-submit-quote"
-                    disabled={!selectedShipping}
-                    onClick={() => {
-                        console.log(selectedShipping);
-                        submitQuote(selectedShipping);
-                        setShowShippingModal(false);
-                    }}
-                >
-                    Confirm & Submit
-                </Button>
+                {step < STEPS.REVIEW ? (
+                    <Button
+                        variant="primary"
+                        // disabled={
+                        //     (step === STEPS.SHIPPING && !selectedShipping) ||
+                        //     (step === STEPS.DELIVERY && (!shippingData || !selectedShippingMethod))
+                        // }
+                        onClick={() => setStep(prev => prev + 1)}
+                    >
+                        Next
+                    </Button>
+                ) : (
+                    <Button
+                        variant="primary"
+                        onClick={() => submitQuote(selectedShippingMethod)}
+                    >
+                        Confirm & Submit
+                    </Button>
+                )}
             </Modal.Footer>
         </Modal>
 
@@ -761,6 +791,7 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
                 show={showProductModal}
                 onHide={() => setShowProductModal(false)}
                 size="xl"
+                className="quote-modal-gold product-search-modal"
                 centered
             >
                 <Modal.Header closeButton>
@@ -772,10 +803,10 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
                     />
                 </Modal.Header>
 
-                <Modal.Body>
+                <Modal.Body className="serch-results">
                     <Row>
                         {/* LEFT SUGGESTIONS */}
-                        <Col md={3}>
+                        <Col md={3} className="top-matches">
                             <h6>Top Suggestions</h6>
                             {searchResults.slice(0, 6).map((p, i) => (
                                 <div
@@ -788,11 +819,11 @@ export default function QuoteForm({userId,onQuoteSubmitted, shippingId}) {
                         </Col>
 
                         {/* RIGHT PRODUCT GRID */}
-                        <Col md={9}>
+                        <Col md={9} className="serch-results-grid">
                             <Row>
                                 {searchResults.map((p) => (
                                     <Col md={4} key={p.value}>
-                                        <div
+                                        <div className="product-box"
                                             onClick={() => selectProductFromModal(p)}
                                         >
                                             {p.full?.image && (
